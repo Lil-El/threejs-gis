@@ -1,0 +1,22 @@
+{
+  "name": "threejs-gis",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lil-El/threejs-gis.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Lil-El/threejs-gis/issues"
+  },
+  "homepage": "https://github.com/Lil-El/threejs-gis#readme",
+  "dependencies": {
+    "three": "^0.167.1"
+  }
+}

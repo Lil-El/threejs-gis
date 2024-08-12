@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/node_modules/three/build/three.module.js",
+          "three/controls/": "/node_modules/three/examples/jsm/controls/"
+        }
+      }
+    </script>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/controls/OrbitControls.js";
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x000000);
+      scene.fog = new THREE.Fog(0xffffff, 0, 1500);
+
+      const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1500);
+
+      const renderer = new THREE.WebGLRenderer();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      const ball = new THREE.SphereGeometry(5, 30, 15, 0, Math.PI * 2, 0, Math.PI);
+      const material = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+      const cube = new THREE.Mesh(ball, material);
+      cube.position.set(0, 0, 0);
+      scene.add(cube);
+
+      // const geometry = new THREE.PlaneGeometry(700, 700);
+      // const planeMaterial = new THREE.MeshBasicMaterial({ color: 0x404040, side: THREE.DoubleSide });
+      // const plane = new THREE.Mesh(geometry, planeMaterial);
+      // plane.rotation.x = Math.PI / 2;
+
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 5);
+      const helper = new THREE.PlaneHelper(plane, 100, 0x94d3ff);
+      scene.add(helper);
+
+      camera.lookAt(0, 0, 0);
+      camera.position.set(0, 0, 500);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.maxPolarAngle = 1.5;
+
+      const axesHelper = new THREE.AxesHelper(50);
+      scene.add(axesHelper);
+
+      function render() {
+        renderer.render(scene, camera);
+        requestAnimationFrame(render);
+
+        controls.update();
+      }
+      render();
+    </script>
+  </body>
+</html>
