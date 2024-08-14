@@ -4,10 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Document</title>
+
     <style>
       * {
         margin: 0;
         padding: 0;
+      }
+
+      .label-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+
+        .label {
+          color: #ffffff;
+          cursor: pointer;
+        }
       }
     </style>
   </head>
@@ -16,57 +31,322 @@
       {
         "imports": {
           "three": "/node_modules/three/build/three.module.js",
-          "three/controls/": "/node_modules/three/examples/jsm/controls/"
+          "three/addons/": "/node_modules/three/examples/jsm/"
         }
       }
     </script>
-
+    <script src="/node_modules/d3/dist/d3.min.js">
+      // d3不符合es module规范，所以直接请求
+    </script>
     <script type="module">
       import * as THREE from "three";
-      import { OrbitControls } from "three/controls/OrbitControls.js";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+      import { CSS2DObject, CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
+      import { GUI } from "three/addons/libs/lil-gui.module.min.js";
 
-      const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x000000);
-      scene.fog = new THREE.Fog(0xffffff, 0, 1500);
+      let geoJSON = null;
 
-      const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1500);
+      await fetch("./geojson/china.json")
+        .then((res) => {
+          return res.json();
+        })
+        .then((data) => {
+          geoJSON = data;
+        });
 
-      const renderer = new THREE.WebGLRenderer();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      document.body.appendChild(renderer.domElement);
+      let camera, scene, renderer, controls;
+      let labelRenderer;
+      let helpers = [];
 
-      const ball = new THREE.SphereGeometry(5, 30, 15, 0, Math.PI * 2, 0, Math.PI);
-      const material = new THREE.MeshBasicMaterial({ color: 0x0000ff });
-      const cube = new THREE.Mesh(ball, material);
-      cube.position.set(0, 0, 0);
-      scene.add(cube);
+      const colorMap = {
+        西北: "#C6E0FF",
+        东北: "#506EA3",
+        华北: "#91AEDC",
+        华东: "#6D89C0",
+        华中: "#8AA5DE",
+        华南: "#BDD2EF",
+        西南: "#4986D2",
+        台湾: "#79a1dc",
+        "香港 ": "#d0dff4",
+        澳门: "#d0dff4",
+        JD: "#a0bfe4",
+      };
+      const lightProp = {
+        intensity: 1,
+        x: 0,
+        y: 0,
+        z: 0,
+      };
 
-      // const geometry = new THREE.PlaneGeometry(700, 700);
-      // const planeMaterial = new THREE.MeshBasicMaterial({ color: 0x404040, side: THREE.DoubleSide });
-      // const plane = new THREE.Mesh(geometry, planeMaterial);
-      // plane.rotation.x = Math.PI / 2;
+      createWorld();
+      createMap(geoJSON);
+      createLight();
+      createGUI();
 
-      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 5);
-      const helper = new THREE.PlaneHelper(plane, 100, 0x94d3ff);
-      scene.add(helper);
+      function createWorld() {
+        // 创建场景
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color("#000000");
 
-      camera.lookAt(0, 0, 0);
-      camera.position.set(0, 0, 500);
+        // 创建相机
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 100;
+        camera.up.set(0, 0, 1);
 
-      const controls = new OrbitControls(camera, renderer.domElement);
-      controls.enableDamping = true;
-      controls.maxPolarAngle = 1.5;
+        // 创建渲染器
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+        renderer.shadowMap.enabled = true;
 
-      const axesHelper = new THREE.AxesHelper(50);
-      scene.add(axesHelper);
+        // 创建控制器
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        // controls.enablePan = false;
+        controls.maxPolarAngle = 1.5;
 
-      function render() {
-        renderer.render(scene, camera);
-        requestAnimationFrame(render);
+        // 添加光源
+        const light = new THREE.AmbientLight(0xffffff, 2);
+        scene.add(light);
 
-        controls.update();
+        // 创建平面
+        const planeGeometry = new THREE.PlaneGeometry(200, 200);
+        const planeMaterial = new THREE.MeshStandardMaterial({
+          color: 0xeaedf5,
+          side: THREE.FrontSide,
+          depthWrite: false,
+        });
+        const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        plane.receiveShadow = true;
+        scene.add(plane);
+
+        // 创建坐标轴
+        const axesHelper = new THREE.AxesHelper(20);
+        scene.add(axesHelper);
+
+        // 创建网格
+        const gridHelper = new THREE.GridHelper(200, 50, "#ffffff", "#ffffff");
+        gridHelper.rotation.x = Math.PI / 2;
+        gridHelper.position.z = 0.01;
+        scene.add(gridHelper);
+
+        // 渲染场景
+        function animate() {
+          requestAnimationFrame(animate);
+
+          renderer.render(scene, camera);
+          controls.update();
+
+          if (labelRenderer) {
+            labelRenderer.render(scene, camera);
+          }
+
+          if (helpers?.length) {
+            helpers.forEach((h) => {
+              h.update();
+            });
+          }
+        }
+        animate();
+
+        window.addEventListener("resize", handleResize);
       }
-      render();
+
+      function createMap(data) {
+        const map = new THREE.Group();
+        scene.add(map);
+
+        createLand(map, data);
+        createBoundary(map, data);
+        createLabel(map, data);
+      }
+
+      function createLand(map, data) {
+        data.features.forEach((feature) => {
+          const group = new THREE.Group();
+
+          if (feature.type === "Feature") {
+            const { properties, geometry } = feature;
+            const { region } = properties;
+            const { type, coordinates } = geometry;
+
+            if (type === "MultiPolygon") {
+              coordinates.forEach((polygon) => {
+                group.add(createPolygon(colorMap[region], polygon));
+              });
+            } else if (type === "Polygon") {
+              group.add(createPolygon(colorMap[region], coordinates));
+            }
+          }
+          group.position.z = 1;
+
+          map.add(group);
+        });
+      }
+
+      function createBoundary(map, data) {
+        data.features.forEach((feature) => {
+          const group = new THREE.Group();
+
+          if (feature.type === "Feature") {
+            const { properties, geometry } = feature;
+            const { name } = properties;
+            const { type, coordinates } = geometry;
+
+            if (type === "MultiPolygon") {
+              coordinates.forEach((polygon) => {
+                group.add(createPolyline(polygon));
+              });
+            } else if (type === "Polygon") {
+              group.add(createPolyline(coordinates));
+            }
+          }
+          group.position.z = 3.1;
+
+          map.add(group);
+        });
+      }
+
+      function createLabel(map, data) {
+        if (!labelRenderer) {
+          labelRenderer = new CSS2DRenderer();
+          labelRenderer.setSize(window.innerWidth, window.innerHeight);
+          labelRenderer.domElement.className = "label-container";
+          document.body.appendChild(labelRenderer.domElement);
+        }
+        const group = new THREE.Group();
+
+        data.features.forEach((feature) => {
+          if (feature.type === "Feature") {
+            const { center, name } = feature.properties;
+            if (name && center) {
+              group.add(createText(name, center));
+            }
+          }
+        });
+
+        map.add(group);
+      }
+
+      function createPolygon(color, polygon) {
+        const projection = d3.geoMercator().center([108.9534688, 34.2704779]).scale(100).translate([0, 0]);
+
+        const shape = new THREE.Shape();
+
+        polygon.forEach((ring) => {
+          ring.forEach((point) => {
+            const [x, y] = projection(point);
+            shape.moveTo(x, -y);
+            shape.lineTo(x, -y);
+          });
+
+          shape.closePath();
+        });
+
+        shape.closePath();
+
+        const geometry = new THREE.ExtrudeGeometry(shape, { depth: 2, bevelEnabled: false });
+        const surfaceMaterial = new THREE.MeshStandardMaterial({ color, side: THREE.FrontSide });
+        const sideMaterial = new THREE.MeshLambertMaterial({ color: "#c4cde3", side: THREE.FrontSide });
+        const mesh = new THREE.Mesh(geometry, [surfaceMaterial, sideMaterial]);
+        mesh.castShadow = true;
+
+        return mesh;
+      }
+
+      function createPolyline(polyline) {
+        const projection = d3.geoMercator().center([108.9534688, 34.2704779]).scale(100).translate([0, 0]);
+
+        const vertices = [];
+
+        polyline.forEach((ring) => {
+          ring.forEach((point) => {
+            const [x, y] = projection(point);
+            vertices.push(new THREE.Vector3(x, -y, 0));
+          });
+        });
+
+        const geometry = new THREE.BufferGeometry();
+        geometry.setFromPoints(vertices);
+
+        const material = new THREE.LineBasicMaterial({ color: 0xffffff });
+
+        const line = new THREE.Line(geometry, material);
+
+        return line;
+      }
+
+      function createText(textContent, point) {
+        const projection = d3.geoMercator().center([108.9534688, 34.2704779]).scale(100).translate([0, 0]);
+        const [x, y] = projection(point);
+
+        const ele = document.createElement("div");
+        ele.className = "label";
+        ele.textContent = textContent;
+
+        const text = new CSS2DObject(ele);
+        text.position.set(x, -y, 3.2);
+
+        return text;
+      }
+
+      function createLight() {
+        const light = new THREE.DirectionalLight("#ffffff", 1);
+        light.position.set(-20, 20, 60);
+        light.castShadow = true;
+        light.name = "light";
+        light.castShadow = true;
+
+        // // 设置阴影贴图模糊度
+        light.shadow.radius = 1;
+        // // 设置阴影贴图的分辨率
+        light.shadow.mapSize.set(2 ** 12, 2 ** 12);
+        // 设置平行光投射相机的属性
+        light.shadow.camera.near = 10;
+        light.shadow.camera.far = 100;
+        light.shadow.camera.top = 60;
+        light.shadow.camera.bottom = -60;
+        light.shadow.camera.left = -60;
+        light.shadow.camera.right = 60;
+        // 添加灯光到场景中
+        scene.add(light);
+
+        const helper1 = new THREE.DirectionalLightHelper(light);
+        const helper2 = new THREE.CameraHelper(light.shadow.camera);
+        helpers.push(helper1);
+        helpers.push(helper2);
+        scene.add(helper1);
+        scene.add(helper2);
+      }
+
+      function createGUI() {
+        const gui = new GUI();
+
+        const folder = gui.addFolder("Light");
+
+        const light = scene.getObjectByName("light");
+
+        folder.add(lightProp, "x", -100, 100).onChange(() => {
+          light.position.x = lightProp.x;
+        });
+        folder.add(lightProp, "y", -100, 100).onChange(() => {
+          light.position.y = lightProp.y;
+        });
+        folder.add(lightProp, "z", -100, 100).onChange(() => {
+          light.position.z = lightProp.z;
+        });
+      }
+
+      function handleResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        if (labelRenderer) {
+          labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        }
+      }
     </script>
   </body>
 </html>
