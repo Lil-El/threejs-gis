@@ -62,6 +62,9 @@
       import * as THREE from "three";
       import { OrbitControls } from "three/addons/controls/OrbitControls.js";
       import { CSS2DObject, CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
+      import { LineGeometry } from "three/addons/lines/LineGeometry.js";
+      import { LineMaterial } from "three/addons/lines/LineMaterial.js";
+      import { Line2 } from "three/addons/lines/Line2.js";
       import { GUI } from "three/addons/libs/lil-gui.module.min.js";
 
       let geoJSON = null;
@@ -381,13 +384,13 @@
 
       function createSpritePoint(map, data) {
         const projection = d3.geoMercator().center(centerCoord).scale(100).translate([0, 0]);
-        data = [centerCoord, [117.9534688, 30.2704779], [119.9534688, 28.2704779]];
+        data = [centerCoord, [125.9534688, 48.2704779], [90.9534688, 40.2704779]];
 
         const group = new THREE.Group();
 
         data.forEach((coord) => {
           const [x, y] = projection(coord);
-          const map = new THREE.TextureLoader().load("/texture/01.png");
+          const map = new THREE.TextureLoader().load(`/texture/0${Math.round(Math.random() * 7) + 1}.png`);
           const material = new THREE.SpriteMaterial({ map, depthTest: false });
           const sprite = new THREE.Sprite(material);
           sprite.center.set(0.5, 0);
@@ -406,6 +409,62 @@
         });
 
         map.add(group);
+
+        for (let i = 0; i < data.length - 1; i++) {
+          createCurveLine(group, group.children[i].position, group.children[i + 1].position);
+        }
+      }
+
+      function createCurveLine(group, from, to) {
+        const vertexShader = `
+            varying vec3 vColor;
+
+            void main() {
+              vColor = color;
+              gl_PointSize = 10.0;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `;
+
+        const fragmentShader = `
+            varying vec3 vColor;
+
+            void main() {
+              gl_FragColor = vec4(vColor, 1.0);
+            }
+          `;
+
+        const line3 = new THREE.Line3(from, to);
+        const center = line3.getCenter(new THREE.Vector3()).setZ(12);
+
+        const lineCurve = new THREE.QuadraticBezierCurve3(from, center, to);
+        const points = lineCurve.getPoints(100);
+
+        const pointsArray = [];
+        const colorsArray = [];
+        points.forEach((point) => {
+          pointsArray.push(point.x, point.y, point.z);
+          colorsArray.push(Math.random(), Math.random(), Math.random());
+        });
+
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute(pointsArray, 3));
+        // geometry.setAttribute("vPosition", new THREE.Float32BufferAttribute(points, 3));
+        geometry.setAttribute("color", new THREE.Float32BufferAttribute(colorsArray, 3));
+
+        const material = new THREE.ShaderMaterial({
+          // uniforms: {},
+          vertexShader: vertexShader,
+          fragmentShader: fragmentShader,
+          transparent: !true,
+          depthWrite: false,
+          // blending: THREE.AdditiveBlending,
+          vertexColors: true,
+        });
+
+        const line = new THREE.Line(geometry, material);
+
+        group.add(line);
       }
 
       function createLight() {
@@ -447,7 +506,6 @@
             map: new THREE.TextureLoader().load(url),
             transparent: true,
             depthWrite: false,
-            needsUpdate: true,
           });
           const plane = new THREE.Mesh(planeGeometry, planeMaterial);
           scene.add(plane);
