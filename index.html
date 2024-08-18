@@ -39,7 +39,7 @@
         width: 100px;
         height: 100px;
         background-color: #000000;
-        /* display: none; */
+        display: none;
       }
     </style>
   </head>
@@ -67,6 +67,12 @@
       import { Line2 } from "three/addons/lines/Line2.js";
       import { GUI } from "three/addons/libs/lil-gui.module.min.js";
 
+      import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+      import { RenderPass } from "three/addons/postprocessing/RenderPass.js"; // 引入OutlinePass通道
+      import { OutlinePass } from "three/addons/postprocessing/OutlinePass.js"; // 引入UnrealBloomPass通道
+      import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+      import { GlitchPass } from "three/addons/postprocessing/GlitchPass.js";
+
       let geoJSON = null;
 
       await fetch("./geojson/china.json")
@@ -77,7 +83,7 @@
           geoJSON = data;
         });
 
-      let camera, scene, renderer, controls;
+      let camera, scene, renderer, controls, composer;
       let labelRenderer;
       let raycaster, mouse;
       let followSprite = null;
@@ -181,7 +187,11 @@
         function render() {
           requestAnimationFrame(render);
 
-          renderer.render(scene, camera);
+          if (composer) {
+            composer.render();
+          } else {
+            renderer.render(scene, camera);
+          }
           controls.update();
 
           if (labelRenderer) {
@@ -244,12 +254,20 @@
 
       function createMap(data) {
         const map = new THREE.Group();
+        map.name = "MAP";
         scene.add(map);
 
         createLand(map, data);
         createBoundary(map, data);
         createLabel(map, data);
         createSpritePoint(map);
+        setEffect(map);
+      }
+
+      function setEffect(map) {
+        composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
       }
 
       function createLand(map, data) {
@@ -596,18 +614,79 @@
         });
       }
 
+      function createOutlineEffect() {
+        const outlinePass = new OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), scene, camera);
+        outlinePass.selectedObjects = [scene.getObjectByName("MAP")];
+        outlinePass.visibleEdgeColor = new THREE.Color(0x00ff00);
+        outlinePass.pulsePeriod = 2;
+        composer.addPass(outlinePass);
+
+        return outlinePass;
+      }
+
+      function createBloomEffect() {
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0.9;
+        bloomPass.strength = 0.3;
+        bloomPass.radius = 0;
+        composer.addPass(bloomPass);
+
+        return bloomPass;
+      }
+
+      function createGlitchPass() {
+        const glitchPass = new GlitchPass();
+        composer.addPass(glitchPass);
+
+        return glitchPass;
+      }
+
       function createGUI() {
         const gui = new GUI();
 
-        // const textureObj = {
-        //   size: 130,
-        // };
+        const effects = {
+          outline: false,
+          bloom: false,
+          glitch: false,
+        };
 
-        // gui.add(textureObj, "size", 130, 200).onChange((value) => {
-        //   scene.getObjectsByProperty("name", "texture-plane").forEach((plane) => {
-        //     plane.geometry = new THREE.PlaneGeometry(value, value);
-        //   });
-        // });
+        const folder = gui.addFolder("效果");
+
+        folder
+          .add(effects, "bloom", [false, true])
+          .name("整体发光")
+          .onChange((value) => {
+            if (value) {
+              effects.bloomEffect = createBloomEffect();
+            } else {
+              composer.removePass(effects.bloomEffect);
+              effects.bloomEffect = null;
+            }
+          });
+
+        folder
+          .add(effects, "outline", [false, true])
+          .name("边缘发光")
+          .onChange((value) => {
+            if (value) {
+              effects.outlineEffect = createOutlineEffect();
+            } else {
+              composer.removePass(effects.outlineEffect);
+              effects.outlineEffect = null;
+            }
+          });
+
+        folder
+          .add(effects, "glitch", [false, true])
+          .name("故障闪屏")
+          .onChange((value) => {
+            if (value) {
+              effects.glitchEffect = createGlitchPass();
+            } else {
+              composer.removePass(effects.glitchEffect);
+              effects.glitchEffect = null;
+            }
+          });
       }
     </script>
   </body>
