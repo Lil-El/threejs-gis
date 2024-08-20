@@ -482,11 +482,24 @@
       function createCurveLine(group, from, to) {
         const vertexShader = `
             varying vec3 vColor;
-
+            uniform float time;
+            uniform vec3 from;
+            uniform vec3 to;
+            
             void main() {
               vColor = color;
               gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-              gl_PointSize = distance(vec4(position, 1.0), vec4(0, 0, 0, 1.0)) / 10.0;
+
+              // gl_PointSize = distance(vec4(position, 1.0), vec4(0, 0, 0, 1.0)) / 10.0;
+
+              
+              float distance = distance(vec4(position, 1.0), vec4(from, 1.0));
+              float t = distance - sin(time) * 10.0; // -10 - 10
+              if (t < 1.0) {
+                gl_PointSize = 1.0;
+              } else {
+               gl_PointSize = t;
+              }
             }
           `;
 
@@ -516,7 +529,11 @@
         // geometry.setAttribute("color", new THREE.Float32BufferAttribute(colorsArray, 3));
 
         const material = new THREE.ShaderMaterial({
-          // uniforms: {},
+          uniforms: {
+            time: { value: 0 },
+            from: { value: from },
+            to: { value: to },
+          },
           vertexShader: vertexShader,
           fragmentShader: fragmentShader,
           transparent: !true,
@@ -524,11 +541,22 @@
           // depthWrite: true,
           // blending: THREE.AdditiveBlending,
           vertexColors: true,
+          // onBeforeCompile(shader) {
+          // console.log(shader);
+          // },
         });
 
         const line = new THREE.Points(geometry, material);
 
         group.add(line);
+
+        const clock = new THREE.Clock();
+        function animation() {
+          material.uniforms.time.value = clock.getElapsedTime() // material.uniforms.time.value++;
+          // clock.getElapsedTime();
+          requestAnimationFrame(animation);
+        }
+        animation();
       }
 
       function createLight() {
