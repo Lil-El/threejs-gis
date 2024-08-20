@@ -267,9 +267,10 @@
       function createBasicPlane() {
         const planeGeometry = new THREE.PlaneGeometry(1000, 1000);
         const planeMaterial = new THREE.MeshStandardMaterial({
-          color: 0xebeff8, // f5f8ff
+          color: 0xebeff8,
           side: THREE.FrontSide,
           map: new THREE.TextureLoader().load("/texture/plane-bg.png"),
+          transparent: true,
           depthWrite: false,
         });
         const plane = new THREE.Mesh(planeGeometry, planeMaterial);
@@ -288,7 +289,7 @@
             depthWrite: false,
           });
           const plane = new THREE.Mesh(planeGeometry, planeMaterial);
-          plane.position.set(-2, -3, 0);
+          // plane.position.set(-2, -3, 0.1); // 加了会导致plane在一定角度下消失
           plane.scale.set(0, 0, 0);
           plane.name = "ROTATE_PLANE";
           plane.userData.type = name;
