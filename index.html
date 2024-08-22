@@ -46,6 +46,25 @@
   <body>
     <button id="reset-btn">复位</button>
     <div class="popup"></div>
+
+    <script type="text/plain" id="vertex">
+      varying vec3 vColor;
+
+      void main() {
+        vColor = color;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = distance(vec4(position, 1.0), vec4(0, 0, 0, 1.0)) / 10.0;
+      }
+    </script>
+
+    <script type="text/plain" id="fragment">
+      varying vec3 vColor;
+
+      void main() {
+        gl_FragColor = vec4(0, 1.0, 1.0, 1.0);
+      }
+    </script>
+
     <script type="importmap">
       {
         "imports": {
@@ -273,6 +292,9 @@
           transparent: true,
           depthWrite: false,
         });
+        setTimeout(() => {
+          planeMaterial.transparent = false;
+        }, 3000);
         const plane = new THREE.Mesh(planeGeometry, planeMaterial);
         plane.receiveShadow = true;
         scene.add(plane);
@@ -480,24 +502,6 @@
       }
 
       function createCurveLine(group, from, to) {
-        const vertexShader = `
-            varying vec3 vColor;
-
-            void main() {
-              vColor = color;
-              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-              gl_PointSize = distance(vec4(position, 1.0), vec4(0, 0, 0, 1.0)) / 10.0;
-            }
-          `;
-
-        const fragmentShader = `
-            varying vec3 vColor;
-
-            void main() {
-              gl_FragColor = vec4(0, 1.0, 1.0, 1.0);
-            }
-          `;
-
         const line3 = new THREE.Line3(from, to);
         const center = line3.getCenter(new THREE.Vector3()).setZ(12);
 
@@ -517,8 +521,8 @@
 
         const material = new THREE.ShaderMaterial({
           // uniforms: {},
-          vertexShader: vertexShader,
-          fragmentShader: fragmentShader,
+          vertexShader: document.getElementById("vertex").textContent,
+          fragmentShader: document.getElementById("fragment").textContent,
           transparent: !true,
           // depthTest: true,
           // depthWrite: true,
