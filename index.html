@@ -48,20 +48,41 @@
     <div class="popup"></div>
 
     <script type="text/plain" id="vertex">
-      varying vec3 vColor;
+      attribute float aSize; // aSize可以理解为距离，起始点的距离为0，结束点的距离为3000
 
-      void main() {
-        vColor = color;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        gl_PointSize = distance(vec4(position, 1.0), vec4(0, 0, 0, 1.0)) / 10.0;
+
+      uniform float uTime;
+      uniform float uLength;
+
+      varying float vSize;
+
+      void main(){
+        vec4 viewPosition = viewMatrix * modelMatrix *vec4(position,1);
+        gl_Position = projectionMatrix * viewPosition;
+
+        vSize = (aSize-uTime); // time=0时，飞线的粗细和aSize距离有关，此时vSize范围【0，3000】；当time增加时，范围就是【-500， 2500】
+
+        if(vSize<0.0) {
+            vSize = vSize + uLength; // 所有负数变为正数
+        }
+        vSize = (vSize-1000.0)*0.1; // -1000使小于1k的，变为透明
+
+        gl_PointSize = -vSize/viewPosition.z;
       }
     </script>
 
     <script type="text/plain" id="fragment">
-      varying vec3 vColor;
+      varying float vSize;
 
       void main() {
-        gl_FragColor = vec4(0, 1.0, 1.0, 1.0);
+        float distanceToCenter = distance(gl_PointCoord,vec2(0.5,0.5));
+        float strength = 1.0 - (distanceToCenter*2.0);
+
+        if (vSize <= 0.0) {
+            gl_FragColor = vec4(0, 0, 0, 0);
+        } else {
+            gl_FragColor = vec4(0, 1.0, 1.0, strength);
+        }
       }
     </script>
 
@@ -73,9 +94,7 @@
         }
       }
     </script>
-    <script src="/node_modules/d3/dist/d3.min.js">
-      // d3不符合es module规范，所以直接请求
-    </script>
+    <script src="/node_modules/d3/dist/d3.min.js" description="d3注入在全局中使用"></script>
     <script src="/node_modules/gsap/dist/gsap.js"></script>
     <script type="module">
       import * as THREE from "three";
@@ -519,20 +538,39 @@
         geometry.setAttribute("position", new THREE.Float32BufferAttribute(pointsArray, 3));
         // geometry.setAttribute("color", new THREE.Float32BufferAttribute(colorsArray, 3));
 
+        // 给每一个顶点设置属性
+        const aSizeArray = new Float32Array(points.length);
+        for (let i = 0; i < aSizeArray.length; i++) {
+          aSizeArray[i] = i;
+        }
+        // 设置几何体顶点属性
+        geometry.setAttribute("aSize", new THREE.BufferAttribute(aSizeArray, 1));
+
         const material = new THREE.ShaderMaterial({
-          // uniforms: {},
+          uniforms: {
+            uTime: { value: 0 },
+            uColor: { value: new THREE.Color(0xffffff) },
+            uLength: { value: points.length },
+          },
           vertexShader: document.getElementById("vertex").textContent,
           fragmentShader: document.getElementById("fragment").textContent,
-          transparent: !true,
+          transparent: false,
+          vertexColors: true,
           // depthTest: true,
           // depthWrite: true,
-          // blending: THREE.AdditiveBlending,
-          vertexColors: true,
         });
 
         const line = new THREE.Points(geometry, material);
 
         group.add(line);
+
+        // 改变uTime来控制动画
+        gsap.to(material.uniforms.uTime, {
+          value: 3000,
+          duration: 3,
+          repeat: -1,
+          ease: "none",
+        });
       }
 
       function createLight() {
